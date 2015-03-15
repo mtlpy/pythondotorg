@@ -54,21 +54,29 @@ class JobsViewTests(TestCase):
         url = reverse('jobs:job_list')
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, 'jobs/base.html')
+        self.assertTemplateUsed(response, 'jobs/job_list.html')
 
         url = reverse('jobs:job_list_type', kwargs={'slug': self.job_type.slug})
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(response.context['object_list']), 1)
+        self.assertTemplateUsed(response, 'jobs/base.html')
+        self.assertTemplateUsed(response, 'jobs/job_list.html')
 
         url = reverse('jobs:job_list_category', kwargs={'slug': self.job_category.slug})
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(response.context['object_list']), 1)
+        self.assertTemplateUsed(response, 'jobs/base.html')
+        self.assertTemplateUsed(response, 'jobs/job_list.html')
 
         url = reverse('jobs:job_list_location', kwargs={'slug': self.job.location_slug})
         response = self.client.get(url)
         self.assertEqual(len(response.context['object_list']), 1)
         self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, 'jobs/base.html')
+        self.assertTemplateUsed(response, 'jobs/job_list.html')
 
     def test_job_list_mine(self):
         url = reverse('jobs:job_list_mine')
@@ -100,6 +108,8 @@ class JobsViewTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(response.context['object_list']), 1)
         self.assertEqual(response.context['jobs_count'], 2)
+        self.assertTemplateUsed(response, 'jobs/base.html')
+        self.assertTemplateUsed(response, 'jobs/job_list.html')
 
     def test_job_edit(self):
         username = 'kevinarnold'
@@ -125,6 +135,7 @@ class JobsViewTests(TestCase):
 
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, 'jobs/base.html')
 
     def test_job_detail(self):
         url = self.job.get_absolute_url()
@@ -132,6 +143,7 @@ class JobsViewTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.context['jobs_count'], 1)
+        self.assertTemplateUsed(response, 'jobs/base.html')
 
     def test_job_detail_security(self):
         """
@@ -209,6 +221,31 @@ class JobsViewTests(TestCase):
         self.assertEqual(job.creator, creator)
         self.assertEqual(job.status, 'review')
 
+    def test_job_create_prepopulate_email(self):
+        create_url = reverse('jobs:job_create')
+
+        # Not logged in, no email prepopulation in the form.
+        response = self.client.get(create_url)
+        self.assertEqual(response.context['form'].initial,
+                         {})
+
+        user_data = {
+            'username': 'phrasebook',
+            'email': 'hungarian@example.com',
+            'password': 'hovereel',
+        }
+
+        User = get_user_model()
+        creator = User.objects.create_user(**user_data)
+
+        # Logged in, email address is prepopulated.
+        self.client.login(username=user_data['username'],
+                          password=user_data['password'])
+        response = self.client.get(create_url)
+
+        self.assertEqual(response.context['form'].initial,
+                         {'email': user_data['email']})
+
     def test_job_types(self):
         job_type2 = JobTypeFactory(
             name='Senior Developer',
@@ -255,13 +292,16 @@ class JobsViewTests(TestCase):
         self.assertFalse('Lawrence' in content)
 
     def test_job_display_name(self):
-        self.assertEqual(self.job.display_name, self.job.company_name)
+        self.assertEqual(self.job.display_name,
+            "%s, %s" % (self.job.job_title, self.job.company_name))
 
         self.job.company_name = 'ABC'
-        self.assertEqual(self.job.display_name, self.job.company_name)
+        self.assertEqual(self.job.display_name,
+            "%s, %s" % (self.job.job_title, self.job.company_name))
 
         self.job.company_name = ''
-        self.assertEqual(self.job.display_name, self.job.company_name)
+        self.assertEqual(self.job.display_name,
+            "%s, %s" % (self.job.job_title, self.job.company_name))
 
     def test_job_display_about(self):
         self.job.company_description.raw = 'XYZ'

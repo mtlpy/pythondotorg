@@ -1,8 +1,11 @@
+import datetime
+
+from django.core import mail
 from django.test import TestCase
 from django.utils import timezone
 
 from .. import factories
-from ..models import Job
+from ..models import Job, JobType, JobCategory
 
 
 class JobsModelsTests(TestCase):
@@ -70,6 +73,41 @@ class JobsModelsTests(TestCase):
         factories.ReviewJobFactory()
         self.assertEqual(Job.objects.review().count(), 2)
 
+    def test_visible_manager(self):
+        j1 = factories.ApprovedJobFactory()
+        j2 = factories.JobFactory()
+        past = timezone.now() - datetime.timedelta(days=1)
+        j3 = factories.ApprovedJobFactory(expires=past)
+
+        visible = Job.objects.visible()
+        self.assertTrue(len(visible), 1)
+        self.assertTrue(j1 in visible)
+        self.assertFalse(j2 in visible)
+        self.assertFalse(j3 in visible)
+
+    def test_job_type_active_types_manager(self):
+        t1 = factories.JobTypeFactory()
+        t2 = factories.JobTypeFactory()
+        j1 = factories.ApprovedJobFactory()
+        j1.job_types.add(t1)
+
+        qs = JobType.objects.active_types()
+        self.assertEqual(len(qs), 1)
+        self.assertTrue(t1 in qs)
+        self.assertFalse(t2 in qs)
+
+    def test_job_type_active_categories_manager(self):
+        c1 = factories.JobCategoryFactory()
+        c2 = factories.JobCategoryFactory()
+        j1 = factories.ApprovedJobFactory()
+        j1.category = c1
+        j1.save()
+
+        qs = JobCategory.objects.active_categories()
+        self.assertEqual(len(qs), 1)
+        self.assertTrue(c1 in qs)
+        self.assertFalse(c2 in qs)
+
     def test_get_previous_approved(self):
         job1 = self.create_job(status=Job.STATUS_APPROVED)
         job2 = self.create_job()
@@ -87,3 +125,28 @@ class JobsModelsTests(TestCase):
         self.assertEqual(job3.get_previous_listing(), job2)
         self.assertEqual(job2.get_previous_listing(), job1)
 
+    def test_region_optional(self):
+        job = self.create_job(region=None)
+        self.assertEqual(job.city, "Memphis")
+        self.assertEqual(job.country, "USA")
+        self.assertIsNone(job.region)
+
+    def test_display_location(self):
+        job1 = self.create_job()
+        self.assertEqual(job1.display_location, 'Memphis, TN, USA')
+
+        job2 = self.create_job(region=None)
+        self.assertEqual(job2.display_location, 'Memphis, USA')
+
+    def test_email_on_submit(self):
+        job = self.create_job()
+        mail.outbox = []
+        self.assertEqual(0, len(mail.outbox))
+        job.status = Job.STATUS_REVIEW
+        job.save()
+        self.assertEqual(1, len(mail.outbox))
+        job.status = Job.STATUS_DRAFT
+        job.save()
+        self.assertEqual(1, len(mail.outbox))
+        expected_subject = "Job Submitted for Approval: {}".format(job.display_name)
+        self.assertEqual(mail.outbox[0].subject, expected_subject)

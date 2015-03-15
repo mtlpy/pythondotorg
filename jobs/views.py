@@ -1,17 +1,13 @@
-import datetime
-
 from braces.views import LoginRequiredMixin, GroupRequiredMixin
 from django.contrib import messages
+from django.core.urlresolvers import reverse
 from django.db.models import Q
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect
-from django.utils import timezone
 from django.views.generic import ListView, DetailView, CreateView, UpdateView, TemplateView, View
 
 from .forms import JobForm
 from .models import Job, JobType, JobCategory
-
-THRESHOLD_DAYS = 90
 
 
 class JobBoardAdminRequiredMixin(GroupRequiredMixin):
@@ -21,7 +17,20 @@ class JobBoardAdminRequiredMixin(GroupRequiredMixin):
 class JobMixin(object):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['jobs_count'] = Job.objects.approved().count()
+
+        active_locations = Job.objects.visible().distinct(
+            'location_slug'
+        ).order_by(
+            'location_slug',
+        )
+
+        context.update({
+            'jobs_count': Job.objects.visible().count(),
+            'active_types': JobType.objects.active_types(),
+            'active_categories': JobCategory.objects.active_categories(),
+            'active_locations': active_locations,
+        })
+
         return context
 
 
@@ -29,8 +38,10 @@ class JobList(JobMixin, ListView):
     model = Job
     paginate_by = 25
 
+    job_list_view = True
+
     def get_queryset(self):
-        return super().get_queryset().approved().select_related()
+        return super().get_queryset().visible().select_related()
 
 
 class JobListMine(JobMixin, ListView):
@@ -46,64 +57,78 @@ class JobListMine(JobMixin, ListView):
         return queryset.filter(q)
 
 
-class JobListType(JobList):
+class JobTypeMenu(object):
+    def job_type_view(self):
+        return True
+
+
+class JobCategoryMenu(object):
+    def job_category_view(self):
+        return True
+
+
+class JobLocationMenu(object):
+    def job_location_view(self):
+        return True
+
+
+class JobListType(JobTypeMenu, JobList):
+    template_name = 'jobs/job_type_list.html'
+
     def get_queryset(self):
         return super().get_queryset().filter(job_types__slug=self.kwargs['slug'])
 
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['current_type'] = JobType.objects.get(slug=self.kwargs['slug'])
+        return context
 
-class JobListCategory(JobList):
+
+class JobListCategory(JobCategoryMenu, JobList):
+    template_name = 'jobs/job_category_list.html'
+
     def get_queryset(self):
         return super().get_queryset().filter(category__slug=self.kwargs['slug'])
 
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['current_category'] = JobCategory.objects.get(slug=self.kwargs['slug'])
+        return context
 
-class JobListLocation(JobList):
+
+class JobListLocation(JobLocationMenu, JobList):
+    template_name = 'jobs/job_location_list.html'
+
     def get_queryset(self):
         return super().get_queryset().filter(location_slug=self.kwargs['slug'])
 
 
-class JobTypes(JobMixin, TemplateView):
+class JobTypes(JobTypeMenu, JobMixin, ListView):
     """ View to simply list JobType instances that have current jobs """
     template_name = "jobs/job_types.html"
-
-    def get_context_data(self, *args, **kwargs):
-        context = super().get_context_data(*args, **kwargs)
-
-        threshold = timezone.now() - datetime.timedelta(days=THRESHOLD_DAYS)
-        context['types'] = JobType.objects.filter(
-            jobs__status=Job.STATUS_APPROVED,
-            jobs__created__gt=threshold,
-        ).distinct().order_by('name')
-
-        return context
+    queryset = JobType.objects.active_types().order_by('name')
+    context_object_name = 'types'
 
 
-class JobCategories(JobMixin, TemplateView):
+class JobCategories(JobCategoryMenu, JobMixin, ListView):
     """ View to simply list JobCategory instances that have current jobs """
     template_name = "jobs/job_categories.html"
-
-    def get_context_data(self, *args, **kwargs):
-        context = super().get_context_data(*args, **kwargs)
-
-        threshold = timezone.now() - datetime.timedelta(days=THRESHOLD_DAYS)
-        context['categories'] = JobCategory.objects.filter(
-            jobs__status=Job.STATUS_APPROVED,
-            jobs__created__gt=threshold,
-        ).distinct().order_by('name')
-
-        return context
+    queryset = JobCategory.objects.active_categories().order_by('name')
+    context_object_name = 'categories'
 
 
-class JobLocations(JobMixin, TemplateView):
+class JobLocations(JobLocationMenu, JobMixin, TemplateView):
     """ View to simply list distinct Countries that have current jobs """
     template_name = "jobs/job_locations.html"
 
     def get_context_data(self, *args, **kwargs):
         context = super().get_context_data(*args, **kwargs)
 
-        threshold = timezone.now() - datetime.timedelta(days=THRESHOLD_DAYS)
-        context['jobs'] = Job.objects.approved().filter(
-            created__gt=threshold
-        ).order_by('country', 'region')
+        context['jobs'] = Job.objects.visible().distinct(
+            'country', 'city'
+        ).order_by(
+            'country', 'city'
+        )
 
         return context
 
@@ -153,7 +178,7 @@ class JobDetail(JobMixin, DetailView):
         if self.request.user.is_staff:
             return qs
         else:
-            return qs.filter(status=Job.STATUS_APPROVED)
+            return qs.visible()
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(
@@ -201,11 +226,13 @@ class JobCreate(JobMixin, JobCreateEditMixin, CreateView):
     form_class = JobForm
 
     def get_success_url(self):
-        return self.object.get_absolute_url()
+        return reverse('jobs:job_thanks')
 
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
         kwargs['request'] = self.request
+        if self.request.user.is_authenticated():
+            kwargs['initial'] = {'email': self.request.user.email}
         return kwargs
 
     def form_valid(self, form):
@@ -225,6 +252,8 @@ class JobEdit(JobMixin, JobCreateEditMixin, UpdateView):
     form_class = JobForm
 
     def get_queryset(self):
+        if self.request.user.is_staff:
+            return super().get_queryset()
         return self.request.user.jobs_job_creator.all()
 
     def form_valid(self, form):
@@ -234,6 +263,13 @@ class JobEdit(JobMixin, JobCreateEditMixin, UpdateView):
         self.object.save()
 
         return form
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(
+            form_action='update',
+        )
+        ctx.update(kwargs)
+        return ctx
 
 
 class JobChangeStatus(LoginRequiredMixin, JobMixin, View):

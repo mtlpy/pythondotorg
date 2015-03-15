@@ -1,5 +1,49 @@
 from django.db.models import Manager
+from django.db.models import Q
 from django.db.models.query import QuerySet
+from django.utils import timezone
+
+
+class JobTypeQuerySet(QuerySet):
+    def active_types(self):
+        """ JobTypes with active jobs """
+        now = timezone.now()
+        return self.filter(
+            jobs__status='approved',
+            jobs__expires__gte=now,
+        ).distinct()
+
+
+class JobTypeManager(Manager):
+    """ Job Type Manager """
+
+    def get_queryset(self):
+        return JobTypeQuerySet(self.model, using=self._db)
+
+    def active_types(self):
+        """ Return all JobTypes that have active Jobs """
+        return self.get_queryset().active_types()
+
+
+class JobCategoryQuerySet(QuerySet):
+    def active_categories(self):
+        """ JobCategory with active jobs """
+        now = timezone.now()
+        return self.filter(
+            jobs__status='approved',
+            jobs__expires__gte=now,
+        ).distinct()
+
+
+class JobCategoryManager(Manager):
+    """ JobCategory Manager """
+
+    def get_queryset(self):
+        return JobCategoryQuerySet(self.model, using=self._db)
+
+    def active_categories(self):
+        """ Return all JobCategories that have active Jobs """
+        return self.get_queryset().active_categories()
 
 
 class JobQuerySet(QuerySet):
@@ -30,6 +74,17 @@ class JobQuerySet(QuerySet):
             self.model.STATUS_REVIEW,
         ])
 
+    def visible(self):
+        """
+        Jobs that should be publicly visible on the website. They will have an
+        approved status and be less than 90 days old
+        """
+        now = timezone.now()
+        return self.filter(
+            Q(status__exact=self.model.STATUS_APPROVED) &
+            Q(expires__gte=now)
+        )
+
 
 class JobManager(Manager):
     def get_queryset(self):
@@ -58,3 +113,6 @@ class JobManager(Manager):
 
     def review(self):
         return self.get_queryset().review()
+
+    def visible(self):
+        return self.get_queryset().visible()

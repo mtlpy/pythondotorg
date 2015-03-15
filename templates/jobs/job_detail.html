@@ -1,19 +1,9 @@
-{% extends "base.html" %}
+{% extends "jobs/base.html" %}
 {% load boxes %}
 
-{% block page_title %}Job Listing at {{ object.display_name }} | {{ SITE_INFO.site_name }}{% endblock %}
+{% block page_title %}{{ object.display_name }} | {{ SITE_INFO.site_name }}{% endblock %}
 
 {% block body_attributes %}class="jobs default-page single-job"{% endblock %}
-
-
-{% block main-nav_attributes %}jobs-navigation{% endblock %}
-
-
-{% block main_navigation %}
-{% load sitetree %}
-{% sitetree_menu from "main" include "jobs-meta" template "sitetree/submenu.html" %}
-{% endblock %}
-
 
 {% block content_attributes %}with-right-sidebar{% endblock %}
 
@@ -22,13 +12,20 @@
 {% load companies %}
 <article class="text">
 
+    {% if request.user.is_staff %}
+    <p class="user-feedback level-notice">
+        This job is in <strong>{{ object.status }}</strong> mode. You're able
+        to see this because you're in the staff or super user group.
+    </p>
+    {% endif %}
+
 	<h1 class="listing-company">
         <span class="listing-company-name">
             {% if object.is_new %}<span class="listing-new">New</span>
             {% if user_can_edit %}<a href="{% url 'jobs:job_edit' pk=object.pk %}">Edit your listing</a>{% endif %}
             {% endif %}<span class="company-name">{{ object.display_name }}</span>
         </span>
-        <span class="listing-location"><a href="{% url 'jobs:job_list_location' slug=object.location_slug %}" title="More jobs in {{ object.city }}, {{ object.region }}">{{ object.city }}, {{ object.region }}, {{ object.country }}</a></span>
+        <span class="listing-location"><a href="{% url 'jobs:job_list_location' slug=object.location_slug %}" title="More jobs in {{ object.display_location }}">{{object.display_location}}</a></span>
     </h1>
 
     <!-- User input html/markup/rst/whatever -->
@@ -143,7 +140,7 @@
         <a class="prev-button" href="{{ previous.get_absolute_url }}">
             <span class="prev-button-text"><span class="icon-arrow-left"><span>&larr;</span></span> Previous</span>
             <span class="prevnext-description">
-                <span class="company-name">{{ previous.display_name }}</span> in <span class="company-location">{{ previous.city }}, {{ previous.region }}, {{ previous.country }}</span>
+                <span class="company-name">{{ previous.display_name }}</span> in <span class="company-location">{{ previous.display_location }}</span>
             </span>
         </a>
         {% else %}
@@ -158,7 +155,7 @@
         <a class="next-button" href="{{ next.get_absolute_url }}">
             <span class="next-button-text">Next <span class="icon-arrow-right"><span>&rarr;</span></span></span>
             <span class="prevnext-description">
-                <span class="company-name">{{ next.display_name }}</span> in <span class="company-location">{{ next.city }}, {{ next.region }}, {{ next.country }}</span>
+                <span class="company-name">{{ next.display_name }}</span> in <span class="company-location">{{ next.display_location }}</span>
             </span>
         </a>
         {% else %}
@@ -171,9 +168,7 @@
 {% endblock content %}
 
 
-{% block right_sidebar %}
-<aside class="right-sidebar">
-
+{% block right_sidebar_header %}
     <div class="sidebar-widget">
         {% if category_jobs %}
         <h3 class="widget-title">More jobs in <a href="{% url 'jobs:job_list_category' slug=object.category.slug %}">{{ object.category.name }}</a></h3>
@@ -181,23 +176,14 @@
         <ul class="menu">
             {% if object.company %}
                 {% for job in category_jobs %}
-                <li><a href="{% url 'jobs:job_list_company' slug=object.company.slug %}">{{ job.display_name }}, {{ job.city }}, {{ job.region }}, {{ job.country }}</a></li>
+                <li><a href="{% url 'jobs:job_list_company' slug=object.company.slug %}">{{ job.display_location }}</a></li>
                 {% endfor %}
             {% endif %}
         </ul>
         {% endif %}
     </div>
+{% endblock right_sidebar_header %}
 
-    {% include "jobs/submit_a_job-widget.html" %}
-    {% include "jobs/featured_companies-widget.html" %}
-
-    <div class="sidebar-widget">
-        {% box 'jobs-subscribe' %}
-
-    </div>
-
-</aside>
-{% endblock right_sidebar %}
 {% block extra_js %}
 {% if under_review %}
 <script type="text/javascript">

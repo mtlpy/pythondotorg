@@ -165,6 +165,12 @@ INSTALLED_APPS = [
 
 ]
 
+# Fixtures
+
+FIXTURE_DIRS = (
+    os.path.join(BASE, 'fixtures'),
+)
+
 ### Testing
 
 SKIP_NETWORK_TESTS = True
@@ -218,6 +224,9 @@ PEP_REPO_PATH = ''
 ### Fastly ###
 FASTLY_API_KEY = False  # Set to Fastly API key in production to allow pages to
                         # be purged on save
+
+# Jobs
+JOB_THRESHOLD_DAYS = 90
 
 ### Pipeline
 

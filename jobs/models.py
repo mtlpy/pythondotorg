@@ -4,13 +4,14 @@ from django.conf import settings
 from django.contrib.comments.signals import comment_was_posted
 from django.core.urlresolvers import reverse
 from django.db import models
+from django.db.models.signals import post_save
 from django.template.defaultfilters import slugify
 from django.utils import timezone
 from markupfield.fields import MarkupField
 
-from .managers import JobManager
+from .managers import JobManager, JobTypeManager, JobCategoryManager
 from .listeners import (on_comment_was_posted, on_job_was_approved,
-                        on_job_was_rejected)
+                        on_job_was_rejected, on_job_was_submitted)
 from .signals import job_was_approved, job_was_rejected
 from cms.models import ContentManageable, NameSlugModel
 
@@ -20,6 +21,8 @@ DEFAULT_MARKUP_TYPE = getattr(settings, 'DEFAULT_MARKUP_TYPE', 'restructuredtext
 
 class JobType(NameSlugModel):
 
+    objects = JobTypeManager()
+
     class Meta(object):
         verbose_name = 'job technologies'
         verbose_name_plural = 'job technologies'
@@ -27,6 +30,8 @@ class JobType(NameSlugModel):
 
 
 class JobCategory(NameSlugModel):
+
+    objects = JobCategoryManager()
 
     class Meta(object):
         verbose_name = 'job category'
@@ -49,7 +54,7 @@ class Job(ContentManageable):
     job_title = models.CharField(max_length=100)
 
     city = models.CharField(max_length=100)
-    region = models.CharField(max_length=100)
+    region = models.CharField('State, Province or Region', blank=True, max_length=100)
     country = models.CharField(max_length=100, db_index=True)
     location_slug = models.SlugField(max_length=350, editable=False)
     country_slug = models.SlugField(max_length=100, editable=False)
@@ -79,8 +84,7 @@ class Job(ContentManageable):
         (STATUS_EXPIRED, 'expired'),
     )
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_REVIEW, db_index=True)
-    dt_start = models.DateTimeField('Job start date', blank=True, null=True)
-    dt_end = models.DateTimeField('Job end date', blank=True, null=True)
+    expires = models.DateTimeField('Job Listing Expiration Date', blank=True, null=True)
 
     telecommuting = models.BooleanField(default=False)
     agencies = models.BooleanField(default=True)
@@ -100,12 +104,17 @@ class Job(ContentManageable):
         return 'Job Listing #{}'.format(self.pk)
 
     def save(self, **kwargs):
-        self.location_slug = slugify('%s %s %s' % (self.city, self.region, self.country))
+        location_parts = (self.city, self.region, self.country)
+        location_str = ''
+        for location_part in location_parts:
+            if location_part is not None:
+                location_str = ' '.join([location_str, location_part])
+        self.location_slug = slugify(location_str)
         self.country_slug = slugify(self.country)
 
-        if not self.dt_start and self.status == self.STATUS_APPROVED:
-            self.dt_start = timezone.now()
-            self.dt_end = timezone.now() + self.NEW_THRESHOLD
+        if not self.expires and self.status == self.STATUS_APPROVED:
+            delta = datetime.timedelta(days=settings.JOB_THRESHOLD_DAYS)
+            self.expires = timezone.now() + delta
 
         return super().save(**kwargs)
 
@@ -132,11 +141,18 @@ class Job(ContentManageable):
 
     @property
     def display_name(self):
-        return self.company_name
+        return "%s, %s" % (self.job_title, self.company_name)
 
     @property
     def display_description(self):
         return self.company_description
+
+    @property
+    def display_location(self):
+        location_parts = [part for part in (self.city, self.region, self.country) 
+                            if part]
+        location_str = ', '.join(location_parts)
+        return location_str
 
     @property
     def is_new(self):
@@ -159,3 +175,5 @@ class Job(ContentManageable):
 comment_was_posted.connect(on_comment_was_posted)
 job_was_approved.connect(on_job_was_approved)
 job_was_rejected.connect(on_job_was_rejected)
+post_save.connect(on_job_was_submitted, sender=Job)
+
