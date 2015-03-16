@@ -966,16 +966,6 @@ table {
     tfoot { border-top: 1px solid $grey-lighterer; }
 }
 
-.jobs {
-  table {
-      @extend table;
-
-      td.description {
-        width: px2em( 720px );
-      }
-  }
-}
-
 .documentation-help { }
 
 .row { }
@@ -1857,6 +1847,16 @@ $colors: $blue, $psf, $yellow, $green, $purple, $red;
 
 .sidebar-widget {
 
+}
+
+.jobs-form {
+    p {
+        padding: 0 px2em( 5px );
+    }
+    .required {
+        background-color: lighten( $red, 43% );
+        padding-top: px2em( 10px );
+    }
 }
 
 .list-recent-jobs {
