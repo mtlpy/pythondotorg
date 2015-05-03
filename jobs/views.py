@@ -133,6 +133,22 @@ class JobLocations(JobLocationMenu, JobMixin, TemplateView):
         return context
 
 
+class JobTelecommute(JobLocationMenu, JobList):
+    """ Specific view for telecommute jobs """
+    template_name = 'jobs/job_telecommute_list.html'
+
+    def get_queryset(self):
+        return super().get_queryset().visible().select_related().filter(
+            telecommuting=True
+        )
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['jobs_count'] = len(self.object_list)
+        context['jobs'] = self.object_list
+        return context
+
+
 class JobReview(LoginRequiredMixin, JobBoardAdminRequiredMixin, JobMixin, ListView):
     template_name = 'jobs/job_review.html'
     paginate_by = 20
@@ -260,6 +276,7 @@ class JobChangeStatus(LoginRequiredMixin, JobMixin, View):
     """
     Abstract class to change a job's status; see the concrete implentations below.
     """
+
     def post(self, request, pk):
         job = get_object_or_404(self.request.user.jobs_job_creator, pk=pk)
         job.status = self.new_status

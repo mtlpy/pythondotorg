@@ -35,7 +35,8 @@ class JobsViewTests(TestCase):
             region='TN',
             country='USA',
             email='hr@company.com',
-            is_featured=True
+            is_featured=True,
+            telecommuting=True,
         )
         self.job.job_types.add(self.job_type)
 
@@ -301,6 +302,12 @@ class JobsViewTests(TestCase):
         self.assertTrue('Memphis' in content)
         self.assertFalse('Lawrence' in content)
 
+    def test_job_telecommute(self):
+        url = reverse('jobs:job_telecommute')
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(self.job in response.context['jobs'])
+
     def test_job_display_name(self):
         self.assertEqual(self.job.display_name,
             "%s, %s" % (self.job.job_title, self.job.company_name))
@@ -468,7 +475,7 @@ class JobsReviewTests(TestCase):
         self.assertEqual(len(mail.outbox), 0)
         response = self.client.post(url, form_data)
         self.assertEqual(response.status_code, 302)
-        self.assertEqual(response['Location'], 'http://testserver/comments/posted/?c=1')
+        self.assertTrue('http://testserver/comments/posted/?c=' in response['Location'])
 
         mail_sent_queue.get(block=True)
         self.assertEqual(len(mail.outbox), 1)
@@ -487,7 +494,7 @@ class JobsReviewTests(TestCase):
         form_data.update(form.initial)
         response = self.client.post(url, form_data)
         self.assertEqual(response.status_code, 302)
-        self.assertEqual(response['Location'], 'http://testserver/comments/posted/?c=2')
+        self.assertTrue('http://testserver/comments/posted/?c=' in response['Location'])
 
         mail_sent_queue.get(block=True)
         self.assertEqual(len(mail.outbox), 3)
