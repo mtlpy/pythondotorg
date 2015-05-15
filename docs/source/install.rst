@@ -9,7 +9,7 @@ You can ignore the below instructions by using Vagrant::
     $ vagrant up
     $ vagrant ssh
 
-The box will be provisioned by Chef with Python 3.3, a virtualenv set up with
+The box will be provisioned by Chef with Python 3.4, a virtualenv set up with
 requirements installed, and a database ready to use. The virtualenv is
 activated upon login.
 
@@ -23,16 +23,16 @@ First, clone the repository::
 
     $ git clone git@github.com:python/pythondotorg.git
 
-You'll want a virtualenv. Python 3.3 actually includes virtualenv built-in, so
+You'll want a virtualenv. Python 3.4 actually includes virtualenv built-in, so
 you can do::
 
-    $ pyvenv-3.3 <env>
+    $ pyvenv-3.4 <env>
     $ source <env>/bin/activate
 
 But you can also use your existing virtualenv and virtualenvwrapper::
 
-    $ virtualenv --python=python3.3 <env>
-    $ mkvirtualenv --python=python3.3 <env>
+    $ virtualenv --python=python3.4 <env>
+    $ mkvirtualenv --python=python3.4 <env>
 
 And then you'll need to install dependencies::
 
@@ -51,12 +51,6 @@ variable)::
 Not it's time to run migrations::
 
     $ ./manage.py migrate
-
-To compile and compress static media, you will need *compass* and
-*yui-compressor*::
-
-    $ gem install bundler
-    $ bundle install
 
 .. note::
 
@@ -79,6 +73,12 @@ Finally, start the development server::
 
 Generating CSS files automatically
 ----------------------------------
+
+To compile and compress static media, you will need *compass* and
+*yui-compressor*::
+
+    $ gem install bundler
+    $ bundle install
 
 Due to performance issues of django-pipeline_, we are using a dummy compiler
 ``pydotorg.compilers.DummySASSCompiler`` in development mode. To generate CSS
